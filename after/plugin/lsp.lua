@@ -1,42 +1,60 @@
-
-local lsp = require("lsp-zero")
-
-lsp.preset("recommended")
-
-lsp.ensure_installed({
-  'tsserver',
-  'rust_analyzer',
-})
-
 -- Fix Undefined global 'vim'
-lsp.configure('lua-language-server', {
+vim.lsp.config['lua_ls'] = {
+    cmd = { 'lua-language-server' },
+    workspace = {
+  library = { vim.env.VIMRUNTIME },
+  checkThirdParty = false,
+},
+    filetypes = { 'lua' },
     settings = {
         Lua = {
             diagnostics = {
                 globals = { 'vim' }
             }
         }
-    }
-})
+    },
+    on_attach = function(client, bufnr)
+        vim.lsp.completion.enable(true, client.id, bufnr, {
+      autotrigger = true, -- Auto-triggers on typing
+      convert = function(item)
+        return { abbr = item.label:gsub("%b()", "") }
+      end
+    })
+    vim.keymap.set("i", "<C-Space>", vim.lsp.completion.get, { desc = "Trigger completion" })
 
-lsp.on_attach(function(client, bufnr)
-  lsp.default_keymaps({buffer = bufnr})
-end)
+    -- Helper function to check if there's a word before the cursor
+local check_backspace = function()
+  local col = vim.fn.col('.') - 1
+  return col == 0 or vim.fn.getline('.'):sub(col, col):match('%s')
+end
 
--- When you don't have mason.nvim installed
--- You'll need to list the servers installed in your system
-lsp.setup_servers({'tsserver', 'eslint'})
+-- Map Tab to handle completion
+vim.keymap.set('i', '<Tab>', function()
+  if vim.fn.pumvisible() == 1 then
+    return '<C-n>' -- If menu is open, go to next item
+  elseif not check_backspace() then
+    return '<C-x><C-o>' -- If after a word/dot, trigger LSP completion
+  else
+    return '<Tab>' -- Otherwise, just insert a normal tab
+  end
+end, { expr = true, replace_keycodes = true })
 
--- (Optional) Configure lua language server for neovim
-require('lspconfig').lua_ls.setup(lsp.nvim_lua_ls())
+-- Map S-Tab to go backwards in the menu
+vim.keymap.set('i', '<S-Tab>', function()
+  if vim.fn.pumvisible() == 1 then
+    return '<C-p>'
+  end
+  return '<S-Tab>'
+end, { expr = true, replace_keycodes = true })
 
-local cmp = require('cmp')
-local cmp_select = {behavior = cmp.SelectBehavior.Select}
-local cmp_mappings = lsp.defaults.cmp_mappings({
-    ['<C-p>'] = cmp.mapping.select_prev_item(cmp_select),
-    ['<C-n>'] = cmp.mapping.select_next_item(cmp_select),
-    ['<C-y>'] = cmp.mapping.confirm({ select = true }),
-    ['<C-Space>'] = cmp.mapping.complete(),
-})
+end,
+}
 
-lsp.setup()
+-- Better completion menu behavior
+vim.opt.completeopt = { 'menuone', 'noselect', 'noinsert' }
+
+-- Shorten the time Neovim waits to update things (improves responsiveness)
+vim.opt.updatetime = 250
+
+vim.lsp.enable('lua_ls')
+
